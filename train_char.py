@@ -82,7 +82,7 @@ def main():
 
     print('load data successfully')
 
-    model = resnet34(num_classes = args.num_classes)
+    model = resnet34(num_classes = args.num_classes, inchannels=1)
     init_weights(model)
     criterion_smooth = CrossEntropyLabelSmooth(args.num_classes, 0.1)
 

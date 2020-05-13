@@ -11,6 +11,7 @@ import PIL
 import time
 import logging
 import argparse
+import torch.nn.functional as F
 
 
 
@@ -24,18 +25,18 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 def get_args():
     parser = argparse.ArgumentParser("Plate recognition")
-    parser.add_argument("--data_path", type=str,default="../data/Chars_data")
-    parser.add_argument("--lr", type=float, dest="lr", default=2e-4, help="Base Learning Rate")
-    parser.add_argument("--batchsize", type=int, dest="batchsize",default=32, help="optimizing batch")
-    parser.add_argument("--epoch", type=int, dest="epoch", default=10, help="Number of epochs")
+    parser.add_argument("--data_path", type=str,default="../data/Plate_dataset")
+    parser.add_argument("--lr", type=float, dest="lr", default=1e-5, help="Base Learning Rate")
+    parser.add_argument("--batchsize", type=int, dest="batchsize",default=16, help="optimizing batch")
+    parser.add_argument("--epoch", type=int, dest="epoch", default=100, help="Number of epochs")
 
     parser.add_argument("--gpu", type=int, dest="gpunum", default=1, help="gpu number")
     parser.add_argument("--ft", type=int, dest="ft", default=0, help="whether it is a finetune process")
-    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/char_c/resnet34', help='path for saving trained models')
+    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/pydm/plate_r/resnet34', help='path for saving trained models')
     parser.add_argument('--val_interval', type=int, default=1, help='validation interval')
     parser.add_argument('--save_interval', type=int, default=1, help='model saving interval')
     parser.add_argument('--auto_continue',type=bool,default = 0)
-    parser.add_argument("--num_classes",type=int, default = 36)
+    parser.add_argument("--num_classes",type=int, default = 4)
     args = parser.parse_args()
     return args
 
@@ -56,45 +57,43 @@ def main():
     fh.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(fh)
 
-    use_gpu = False
+    args.use_gpu = False
     if torch.cuda.is_available():
-        use_gpu = True
+        args.use_gpu = True
     torch.backends.cudnn.enabled = True
 
     # dataset splitting
-    validation_split = 0.15
-    dataset_size = len(os.listdir(os.path.join("../data","images","train")))
-    print(dataset_size)
-    indices = list(range(dataset_size))
-    split = int(np.floor(validation_split * dataset_size))
-    np.random.shuffle(indices)
-    train_indices, val_indices = indices[split:], indices[:split]
-    trainset = SceneDataset(r"../data",istrain=True, indices = train_indices)
-    valset   = SceneDataset(r"../data",istrain=False, indices = val_indices)
+    train_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
+        ])
+    val_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
+        ])
+    trainset = PlateDataset(args.data_path, istrain=True, transform = train_transform)
+    valset   = PlateDataset(args.data_path, istrain=False, transform = val_transform)
     print(len(trainset),len(valset))
 
-
     trainLoader = torch.utils.data.DataLoader(trainset, batch_size=args.batchsize, shuffle=True)
-    valLoader   = torch.utils.data.DataLoader(valset, batch_size=4, shuffle=False)
+    valLoader   = torch.utils.data.DataLoader(valset, batch_size=args.batchsize, shuffle=False)
     print('load data successfully')
 
-    model = R2AttU_Net()
+    model = resnet34()
     init_weights(model)
-    criterion_smooth = CrossEntropyLabelSmooth(50, 0.1)
-
+    criterion = GiouLoss()
 
     optimizer = torch.optim.Adamax(model.parameters(),lr=args.lr, betas=(0.9, 0.999))
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,
                     lambda step : (1.0-step/args.epoch) if step <= args.epoch else 0, last_epoch=-1)
 
 
-    if use_gpu:
+    if args.use_gpu:
         #model = nn.DataParallel(model).cuda()
-        model = model.cuda()
-        loss_function = criterion_smooth.cuda()
-        device = torch.device("cuda")
+        model     = model.cuda()
+        criterion = criterion.cuda()
+        device    = torch.device("cuda")
     else:
-        loss_function = criterion_smooth
         device = torch.device("cpu")
 
     model = model.to(device)
@@ -111,7 +110,7 @@ def main():
                 scheduler.step()
 
     args.optimizer = optimizer
-    args.loss_function = loss_function
+    args.loss_function = criterion
     args.scheduler = scheduler
 
     args.trainLoader = trainLoader
@@ -131,88 +130,111 @@ def train(model, device, args, epoch, all_iters=None):
     loss_function = args.loss_function
     scheduler = args.scheduler
 
-
-    t1 = time.time()
-    Top1_err, Top5_err = 0.0, 0.0
-    Top1_intv,Top5_intv = 0.0, 0.0
+    iou_sum,  giou_sum  = 0.0, 0.0
+    iou_intv, giou_intv = 0.0, 0.0
     model.train()
     optimizer.zero_grad()
-    printinterval = 100
+    printinterval = 1
     print(f"---------------  [EPOCH {epoch}]  ---------------")
+
     for i, (data, target) in tqdm(enumerate(args.trainLoader,0),ncols = 100):
+        t1 = time.time()
         all_iters += 1
-        target = target.type(torch.LongTensor)
         data, target = data.to(device), target.to(device)
+        b, c, h, w = data.shape
+        output = torch.sigmoid(model(data))
+        pred   = torch.zeros_like(output)
+        pred[:, 2:4] = output[:, 0:2] + output[:, 2:4]
+        pred[:, 0:2] = output[:, 0:2]
+        pred = pred.clamp(0.0, 1.0)
 
-        output = model(data).squeeze()
 
-        loss = loss_function(output, target)
+        # compute loss
+        if args.use_gpu:
+            scale = torch.Tensor([w,h,w,h]).cuda()
+        else:
+            scale = torch.Tensor([w,h,w,h])
+        pos = pred*scale
+
+        iou, giou = args.loss_function(args, pos, target)
+
+        loss = (1 - giou).mean()
+
+        # print("forward time", time.time() - t1)
         loss.backward()
 
+        # print("back ward time", time.time()-t1)
         for p in model.parameters():
             if p.grad is not None and p.grad.sum() == 0:
                 p.grad = None
 
         optimizer.step()
         optimizer.zero_grad()
-        prec1, prec5 = accuracy(output, target, topk=(1, 5))
 
-        Top1_err += 1 - prec1.item() / 100
-        Top5_err += 1 - prec5.item() / 100
-        Top1_intv += 1 - prec1.item() / 100
-        Top5_intv += 1 - prec5.item() / 100
+        iou_sum   += iou.mean().item()
+        iou_intv  += iou.mean().item()
+        giou_sum  += giou.mean().item()
+        giou_intv += giou.mean().item()
 
         if (i+1)%printinterval == 0:
             printInfo = 'EPOCH {} ITER {}: lr = {:.6f},\tloss = {:.6f},\t'.format(epoch,all_iters,scheduler.get_lr()[0], loss.item()) + \
-                        'Top-1 err = {:.6f},\t'.format(Top1_intv / printinterval) + \
-                        'Top-5 err = {:.6f},\t'.format(Top5_intv / printinterval)
+                        'IoU = {:.6f},\t'.format(iou_intv / printinterval) + \
+                        'GIoU = {:.6f},\t'.format(giou_intv / printinterval)
             logging.info(printInfo)
-            Top1_intv, Top5_intv = 0.0, 0.0
+            iou_intv, giou_intv = 0.0, 0.0
+        # exit()
     t1 = time.time()
-    Top1_err, Top5_err = 0.0, 0.0
+    iou_sum, giou_sum = 0.0, 0.0
 
     return all_iters
 
 
 def validate(model, device, args, all_iters, is_save):
-    objs = AvgrageMeter()
-    top1 = AvgrageMeter()
-    top5 = AvgrageMeter()
+    print("validation started")
+    iou_sum, giou_sum = 0.0, 0.0
 
     loss_function = args.loss_function
 
     model.eval()
-    max_val_iters = 250
     t1  = time.time()
     with torch.no_grad():
-        for i, (data, target) in tqdm(enumerate(args.valLoader,0)):
-
-            target = target.type(torch.LongTensor)
+        for i, (data, target) in tqdm(enumerate(args.valLoader,0),ncols = 100):
+            t1 = time.time()
+            all_iters += 1
             data, target = data.to(device), target.to(device)
-
-            output = model(data).squeeze()
-            loss = loss_function(output, target)
-
-            prec1, prec5 = accuracy(output, target, topk=(1, 5))
-            n = data.size(0)
-            # print(i,loss.item(),prec1.item(),prec5.item())
-            objs.update(loss.item(), n)
-            top1.update(prec1.item(), n)
-            top5.update(prec5.item(), n)
+            b, c, h, w = data.shape
+            output = torch.sigmoid(model(data))
+            pred   = torch.zeros_like(output)
+            pred[:, 2:4] = output[:, 0:2] + output[:, 2:4]
+            pred[:, 0:2] = output[:, 0:2]
+            pred = pred.clamp(0.0, 1.0)
 
 
-    logInfo = 'TEST Iter {}: loss = {:.6f},\t'.format(all_iters, objs.avg) + \
-              'Top-1 err = {:.6f},\t'.format(1 - top1.avg / 100) + \
-              'Top-5 err = {:.6f},\t'.format(1 - top5.avg / 100) + \
-              'val_time = {:.6f}'.format(time.time() - t1)
-    logging.info(logInfo)
+            # compute loss
+            if args.use_gpu:
+                scale = torch.Tensor([w,h,w,h]).cuda()
+            else:
+                scale = torch.Tensor([w,h,w,h])
+            pos = pred*scale
+
+            iou, giou = args.loss_function(args, pos, target)
+
+            iou_sum   += iou.mean().item()
+            giou_sum  += giou.mean().item()
+
+
+        printInfo = 'ITER {}:\t'.format(all_iters) + \
+                    'IoU = {:.6f},\t'.format(iou_sum / len(args.valLoader)) + \
+                    'GIoU = {:.6f},\t'.format(giou_sum / len(args.valLoader))
+        logging.info(printInfo)
+
     # exit()
 
     if is_save:
         if not os.path.exists(args.save):
             os.makedirs(args.save)
         filename = os.path.join(
-            args.save, f"checkpoint{all_iters:06}-acc{top1.avg / 100:4f}.pth.tar")
+            args.save, f"checkpoint{all_iters:06}-iou{iou_sum / len(args.valLoader):4f}.pth.tar")
         print(filename)
         torch.save({'state_dict': model.state_dict(),}, filename)
 
