@@ -17,7 +17,6 @@ import argparse
 from PIL import Image
 from tqdm import tqdm
 from models import *
-from network import *
 from mydataset import *
 from utils import *
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
@@ -25,18 +24,18 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 def get_args():
     parser = argparse.ArgumentParser("character classification")
-    parser.add_argument("--data_path", type=str,default="../data/Chars_data")
+    parser.add_argument("--checkpoint_path", type=str, dest="checkpoint_path", default="latent_r", help="Path of the validation set")
     parser.add_argument("--lr", type=float, dest="lr", default=2e-4, help="Base Learning Rate")
     parser.add_argument("--batchsize", type=int, dest="batchsize",default=4, help="optimizing batch")
     parser.add_argument("--epoch", type=int, dest="epoch", default=30, help="Number of epochs")
-
+    parser.add_argument("--patchsize", type=int, dest="patchsize", default=128, help="training patch size")
+    parser.add_argument("--G0", type=int, dest="G0", default=64, help="RDN output channel")
     parser.add_argument("--gpu", type=int, dest="gpunum", default=1, help="gpu number")
     parser.add_argument("--ft", type=int, dest="ft", default=0, help="whether it is a finetune process")
     parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/scene_r/trained_models', help='path for saving trained models')
     parser.add_argument('--val_interval', type=int, default=1, help='validation interval')
     parser.add_argument('--save_interval', type=int, default=1, help='model saving interval')
     parser.add_argument('--auto_continue',type=bool,default = 0)
-    parser.add_argument("--num_classes",type=int, default = 36)
     args = parser.parse_args()
     return args
 
@@ -62,22 +61,26 @@ def main():
         use_gpu = True
     torch.backends.cudnn.enabled = True
 
-    # dataset
-    train_csv_path = os.path.join(args.data_path, "train.csv")
-    test_csv_path = os.path.join(args.data_path, "test.csv")
-    if not os.path.exists(train_csv_path) or not os.path.exists(test_csv_path):
-        charDataset_txt_gen(args.data_path)
+    # dataset splitting
+    validation_split = 0.15
+    dataset_size = len(os.listdir(os.path.join("../data","images","train")))
+    print(dataset_size)
+    indices = list(range(dataset_size))
+    split = int(np.floor(validation_split * dataset_size))
+    np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
+    trainset = SceneDataset(r"../data",istrain=True, indices = train_indices)
+    valset   = SceneDataset(r"../data",istrain=False, indices = val_indices)
+    print(len(trainset),len(valset))
 
-    trainset    = CharDataset(args.data_path, istrain=True, transform = train_transform)
-    testset     = CharDataset(args.data_path, istrain=True, transform = test_transform)
+
     trainLoader = torch.utils.data.DataLoader(trainset, batch_size=args.batchsize, shuffle=True)
-    valLoader   = torch.utils.data.DataLoader(valset, batch_size=args.batchsize, shuffle=False)
-
+    valLoader   = torch.utils.data.DataLoader(valset, batch_size=4, shuffle=False)
     print('load data successfully')
 
-    model = resnet34(num_classes = args.num_classes)
+    model = R2AttU_Net()
     init_weights(model)
-    criterion_smooth = CrossEntropyLabelSmooth(args.num_classes, 0.1)
+    criterion_smooth = CrossEntropyLabelSmooth(50, 0.1)
 
 
     optimizer = torch.optim.Adamax(model.parameters(),lr=args.lr, betas=(0.9, 0.999))
@@ -86,7 +89,8 @@ def main():
 
 
     if use_gpu:
-        model = nn.DataParallel(model).cuda()
+        #model = nn.DataParallel(model).cuda()
+        model = model.cuda()
         loss_function = criterion_smooth.cuda()
         device = torch.device("cuda")
     else:
