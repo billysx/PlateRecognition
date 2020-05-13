@@ -17,7 +17,6 @@ import argparse
 from PIL import Image
 from tqdm import tqdm
 from models import *
-from network import *
 from mydataset import *
 from utils import *
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
@@ -27,12 +26,12 @@ def get_args():
     parser = argparse.ArgumentParser("character classification")
     parser.add_argument("--data_path", type=str,default="../data/Chars_data")
     parser.add_argument("--lr", type=float, dest="lr", default=2e-4, help="Base Learning Rate")
-    parser.add_argument("--batchsize", type=int, dest="batchsize",default=4, help="optimizing batch")
-    parser.add_argument("--epoch", type=int, dest="epoch", default=30, help="Number of epochs")
+    parser.add_argument("--batchsize", type=int, dest="batchsize",default=32, help="optimizing batch")
+    parser.add_argument("--epoch", type=int, dest="epoch", default=10, help="Number of epochs")
 
     parser.add_argument("--gpu", type=int, dest="gpunum", default=1, help="gpu number")
     parser.add_argument("--ft", type=int, dest="ft", default=0, help="whether it is a finetune process")
-    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/scene_r/trained_models', help='path for saving trained models')
+    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/char_c/resnet34', help='path for saving trained models')
     parser.add_argument('--val_interval', type=int, default=1, help='validation interval')
     parser.add_argument('--save_interval', type=int, default=1, help='model saving interval')
     parser.add_argument('--auto_continue',type=bool,default = 0)
@@ -68,8 +67,16 @@ def main():
     if not os.path.exists(train_csv_path) or not os.path.exists(test_csv_path):
         charDataset_txt_gen(args.data_path)
 
+    train_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5],[0.5])
+        ])
+    val_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.5],[0.5])
+        ])
     trainset    = CharDataset(args.data_path, istrain=True, transform = train_transform)
-    testset     = CharDataset(args.data_path, istrain=True, transform = test_transform)
+    valset      = CharDataset(args.data_path, istrain=False, transform = val_transform)
     trainLoader = torch.utils.data.DataLoader(trainset, batch_size=args.batchsize, shuffle=True)
     valLoader   = torch.utils.data.DataLoader(valset, batch_size=args.batchsize, shuffle=False)
 
@@ -86,7 +93,7 @@ def main():
 
 
     if use_gpu:
-        model = nn.DataParallel(model).cuda()
+        model = model.cuda()
         loss_function = criterion_smooth.cuda()
         device = torch.device("cuda")
     else:

@@ -48,6 +48,7 @@ class CharDataset(data.Dataset):
 		super(CharDataset, self).__init__()
 		self.transform = transform
 		self.istrain   = istrain
+		self.datapath  = datapath
 
 		if istrain:
 			self.datalist = pd.read_csv(os.path.join(datapath,"train.csv"))
@@ -55,17 +56,15 @@ class CharDataset(data.Dataset):
 			self.datalist = pd.read_csv(os.path.join(datapath,"val.csv"))
 
 	def __len__(self):
-		return len(self.img_list)
+		return len(self.datalist)
 
 	def __getitem__(self, idx):
-        imagepath = os.path.join(self.datapath, self.datalist.iloc[idx].img)
-        label = self.datalist.iloc[idx].label
-        img = Image.open(imagepath)
-        img = self.transform(img)
-
-		# Image reading
-		img = Image.open()
+		imagepath = os.path.join(self.datapath, self.datalist.iloc[idx].image)
+		label = self.datalist.iloc[idx].label
+		img = Image.open(imagepath)
 		img = self.transform(img)
+
+		return img, label
 
 
 

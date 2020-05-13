@@ -23,19 +23,19 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 
 def get_args():
-    parser = argparse.ArgumentParser("character classification")
-    parser.add_argument("--checkpoint_path", type=str, dest="checkpoint_path", default="latent_r", help="Path of the validation set")
+    parser = argparse.ArgumentParser("Plate recognition")
+    parser.add_argument("--data_path", type=str,default="../data/Chars_data")
     parser.add_argument("--lr", type=float, dest="lr", default=2e-4, help="Base Learning Rate")
-    parser.add_argument("--batchsize", type=int, dest="batchsize",default=4, help="optimizing batch")
-    parser.add_argument("--epoch", type=int, dest="epoch", default=30, help="Number of epochs")
-    parser.add_argument("--patchsize", type=int, dest="patchsize", default=128, help="training patch size")
-    parser.add_argument("--G0", type=int, dest="G0", default=64, help="RDN output channel")
+    parser.add_argument("--batchsize", type=int, dest="batchsize",default=32, help="optimizing batch")
+    parser.add_argument("--epoch", type=int, dest="epoch", default=10, help="Number of epochs")
+
     parser.add_argument("--gpu", type=int, dest="gpunum", default=1, help="gpu number")
     parser.add_argument("--ft", type=int, dest="ft", default=0, help="whether it is a finetune process")
-    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/scene_r/trained_models', help='path for saving trained models')
+    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/char_c/resnet34', help='path for saving trained models')
     parser.add_argument('--val_interval', type=int, default=1, help='validation interval')
     parser.add_argument('--save_interval', type=int, default=1, help='model saving interval')
     parser.add_argument('--auto_continue',type=bool,default = 0)
+    parser.add_argument("--num_classes",type=int, default = 36)
     args = parser.parse_args()
     return args
 
