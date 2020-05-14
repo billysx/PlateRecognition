@@ -197,7 +197,6 @@ class GiouLoss(nn.Module):
         return iou, interArea
 
     def batch_giou(self, args, rec1, rec2):
-        #分别是第一个矩形左右上下的坐标
         x1, y1, x2, y2 = rec1[:,0:1], rec1[:,1:2], rec1[:,2:3], rec1[:,3:]
         x3, y3, x4, y4 = rec2[:,0:1], rec2[:,1:2], rec2[:,2:3], rec2[:,3:]
 
@@ -213,8 +212,8 @@ class GiouLoss(nn.Module):
 
 
 
-        add_area = sum_area - interArea.unsqueeze(1)    #两矩形并集的面积
-        end_area = (area_C - add_area)/area_C    #闭包区域中不属于两个框的区域占闭包区域的比重
+        add_area = sum_area - interArea.unsqueeze(1)    # add area of the two box
+        end_area = (area_C - add_area)/area_C    # The area that is out of the box but in the bibao
         # print(f"sum_area: {sum_area}")
         # print(f"whole area: {area_C}")
         # print(f"intersection: {interArea}")

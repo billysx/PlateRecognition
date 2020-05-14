@@ -9,10 +9,11 @@ import random
 import torch
 
 class PlateDataset(data.Dataset):
-    def __init__(self, datapath, transform = None, istrain = True):
+    def __init__(self, datapath, transform = None, istrain = True, istest = False):
         super(PlateDataset, self).__init__()
         self.transform = transform
         self.istrain   = istrain
+        self.istest    = istest
         if istrain:
             self.datapath = os.path.join(datapath,"AC","train")
         else:
@@ -45,17 +46,20 @@ class PlateDataset(data.Dataset):
         # x1,y1,x2,y2
         bbox  = [xmin,ymin,xmax,ymax]
         bbox  = torch.Tensor([int(b)  for b in bbox])
-
+        tmp = 0
         if w != 320:
             edge = ( w - 320 )
-            tmp = random.randint(0, edge)
+            tmp = random.randint( max(0, int(bbox[2])-320), min(bbox[0] ,edge) )
             img = img[:,:,tmp:tmp+320]
             bbox[0] -= tmp
             bbox[2] -= tmp
             w = 320
 
+
         # target = self.encoder(bbox / torch.Tensor([w,h,w,h])) # 7x7x5
         target = bbox
+        if self.istest:
+             return img, target, tmp, self.img_list[idx]
         return img, target
 
     def encoder(self, boxes):
