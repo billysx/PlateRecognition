@@ -59,7 +59,7 @@ class PlateDataset(data.Dataset):
         # target = self.encoder(bbox / torch.Tensor([w,h,w,h])) # 7x7x5
         target = bbox
         if self.istest:
-             return img, target, tmp, self.img_list[idx]
+             return img, target, tmp, self.img_list[idx], label
         return img, target
 
     def encoder(self, boxes):

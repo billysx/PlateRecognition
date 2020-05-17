@@ -24,7 +24,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 def get_args():
     parser = argparse.ArgumentParser("character classification")
-    parser.add_argument("--data_path", type=str,default="../data/Chars_data")
+    parser.add_argument("--data_path", type=str,default="../data/mychar_data")
     parser.add_argument("--lr", type=float, dest="lr", default=2e-4, help="Base Learning Rate")
     parser.add_argument("--batchsize", type=int, dest="batchsize",default=32, help="optimizing batch")
     parser.add_argument("--epoch", type=int, dest="epoch", default=10, help="Number of epochs")
@@ -70,11 +70,13 @@ def main():
     train_transform = transforms.Compose([
         transforms.ColorJitter(brightness=0.4, saturation=0.3),
         transforms.ToTensor(),
-        transforms.Normalize([0.5],[0.5])
+        transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
+        # transforms.Normalize([0.5],[0.5])
         ])
     val_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize([0.5],[0.5])
+        transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
+        # transforms.Normalize([0.5],[0.5])
         ])
     trainset    = CharDataset(args.data_path, istrain=True, transform = train_transform)
     valset      = CharDataset(args.data_path, istrain=False, transform = val_transform)
@@ -83,7 +85,7 @@ def main():
 
     print('load data successfully')
 
-    model = resnet34(num_classes = args.num_classes, inchannels=1)
+    model = resnet34(num_classes = args.num_classes, inchannels=3)
     init_weights(model)
     criterion_smooth = CrossEntropyLabelSmooth(args.num_classes, 0.1)
 

@@ -22,6 +22,8 @@ from utils import *
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # no "I" and "O"
 label_dic = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z"]
+num_dict = {}
+
 
 def get_args():
     parser = argparse.ArgumentParser("Plate recognition")
@@ -100,32 +102,9 @@ def main():
 
 
 def segmentation(img_gray,img_thre, path, args, label):
-    if not os.path.exists(f"../binarize/{path[:-4]}/"):
-        os.makedirs(f"../binarize/{path[:-4]}/")
-    writefile = open(f"../binarize/{path[:-4]}/pred.txt","w")
+
     height = img_thre.shape[0]
     width = img_thre.shape[1]
-
-    # white_by_row    = np.sum(img_thre, axis=1)/255
-    # starth, endh = 0, height-1
-    # for i in range(0, int(height/3)):
-    #     if white_by_row[i] >= 60:
-    #         starth = i
-    #         break
-
-    # for i in range(0, int(height/3)):
-    #     if white_by_row[height -1 -i] >= 60:
-    #         endh = height -1 -i
-    #         break
-    # img_thre = img_thre[starth:endh, :]
-
-
-    # white_by_column = np.sum(img_thre, axis=0)/255
-    # startw, endw = 0, width-1
-    # for i in range(0, 5):
-    #     if white_by_column[i] <= 10:
-    #         startw = i
-    # img_thre = img_thre[:, startw:endw]
 
     white_by_column = np.sum(img_thre, axis=0)/255
     height, width = img_thre.shape
@@ -152,39 +131,23 @@ def segmentation(img_gray,img_thre, path, args, label):
     ans = ""
     for i in range(6):
         im = img_gray[:,max(0,edge[i]-1):min(edge[i+1]+1,width)]
-        im = cv2.GaussianBlur(im,(3,3),0)
+        # im = cv2.GaussianBlur(im,(3,3),0)
         # equalized = cv2.equalizeHist(new)
         # _, img_thre = cv2.threshold(im, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        img_thre = cv2.adaptiveThreshold(im, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 7, 5)
-        res = 255 - img_thre
+        # img_thre = cv2.adaptiveThreshold(im, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 7, 5)
+        # res = 255 - img_thre
         # kernel = np.ones((3, 3), np.uint8)
         # kernel[0,0] = 0
         # kernel[2,2] = 0
         # kernel[0,2] = 0
         # kernel[2,0] = 0
         # res = cv2.dilate(res, kernel)
-        cv2.imwrite(f"../binarize/{path[:-4]}/{i+1}.jpg", res)
-        im = Image.open(f"../binarize/{path[:-4]}/{i+1}.jpg")
-        # im = Image.open(os.path.join("../data/Chars_data/", mylist[i]))
-        # print(im.size)
-        im = val_transform(im).unsqueeze(0)
-        if args.use_gpu:
-            im = im.cuda()
-        output = args.classifier(im)
-        _, pred = output.topk(5, 1, True, True)
-        pred = pred.t()
-        # print(pred[0,0])
-        ans += label_dic[pred[0,0]]
-    print(ans)
-    print(end=" ")
-    print(label[0])
-    if(ans == label[0]):
-        print(1)
+        char_dir = f"../data/mychar_data/{label[0][i]}"
+        if not os.path.exists(char_dir):
+            os.makedirs(char_dir)
+        num_dict[label[0][i]] = num_dict.get(label[0][i],0) + 1
+        cv2.imwrite(os.path.join(char_dir,f"{num_dict[label[0][i]]}.jpg"), im)
 
-    print(ans,file=writefile,end="")
-    print("",file=writefile)
-    print(label[0],file = writefile)
-    writefile.close()
 
 
 def validate(model, device, args, all_iters, is_save, epoch):
@@ -194,14 +157,14 @@ def validate(model, device, args, all_iters, is_save, epoch):
     # model.eval()
     t1  = time.time()
     if args.use_gt:
-        save_path = os.path.join(args.data_path,"AC","test", "plate_gt")
+        save_path = os.path.join(args.data_path,"AC","train", "plate_gt")
     else:
-        save_path = os.path.join(args.data_path,"AC","test", "plate")
-    read_path = os.path.join(args.data_path,"AC","test", "jpeg")
+        save_path = os.path.join(args.data_path,"AC","train", "plate")
+    read_path = os.path.join(args.data_path,"AC","train", "jpeg")
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     with torch.no_grad():
-        for i, (data, target, tmp, imgpath, platelabel) in tqdm(enumerate(args.valLoader,0),ncols = 100):
+        for i, (data, target, tmp, imgpath, platelabel) in tqdm(enumerate(args.trainLoader,0),ncols = 100):
             all_iters += 1
             data, target = data.to(device), target.to(device)
             b, c, h, w = data.shape
@@ -218,15 +181,11 @@ def validate(model, device, args, all_iters, is_save, epoch):
             img = cv2.imread(os.path.join(save_path, imgpath[0]))
             # img = cv2.medianBlur(img, 3)
             h, w, _  = img.shape
-            img = img[7:-3, 2:-2, :]
+            img = img[7:-3, :, :]
             img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img_thre = img_gray
-            # img_gray = cv2.GaussianBlur(img_gray,(5,5),0)
-            # img_thre = cv2.adaptiveThreshold(img_gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 5, 10)
+
             _, img_thre = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-            # cv2.threshold(img_gray, 100, 255, cv2.THRESH_BINARY_INV, img_thre)
-            # cv2.imwrite("test.png", img_thre)
-            # cv2.imwrite(os.path.join(save_path, imgpath[0]), img_thre)
             segmentation(img_gray,img_thre, imgpath[0], args, platelabel)
             # exit()
 
