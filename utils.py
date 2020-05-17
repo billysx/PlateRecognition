@@ -42,12 +42,15 @@ class AvgrageMeter(object):
         self.cnt += n
         self.avg = self.sum / self.cnt
 
-def accuracy(output, target, topk=(1,)):
+def accuracy(output, target, topk=(1,), istrain=True):
     maxk = max(topk)
     batch_size = target.size(0)
 
     _, pred = output.topk(maxk, 1, True, True)
     pred = pred.t()
+    if not istrain:
+        print("pred",pred[:1])
+        print("target",target.view(1, -1))
     correct = pred.eq(target.view(1, -1).expand_as(pred))
 
     res = []
@@ -135,13 +138,15 @@ def charDataset_txt_gen(datapath, validation_split=0.15):
     labellist = []
     labelname = []
     cnt = -1
+    labeldict = {}
     for i,dir in enumerate(sorted(os.listdir(datapath)),0):
         if len(dir)!=1:
             continue
         cnt += 1
+        labeldict[dir] = cnt
         for file in os.listdir(os.path.join(datapath,dir)):
             datalist.append(os.path.join(dir,file))
-            labellist.append(i)
+            labellist.append(cnt)
             labelname.append(dir)
 
     data_frame = pd.DataFrame({"image":datalist, "label":labellist,"name":labelname},

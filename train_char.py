@@ -31,7 +31,7 @@ def get_args():
 
     parser.add_argument("--gpu", type=int, dest="gpunum", default=1, help="gpu number")
     parser.add_argument("--ft", type=int, dest="ft", default=0, help="whether it is a finetune process")
-    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/char_c/resnet34', help='path for saving trained models')
+    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/pydm/char_c/resnet34_1', help='path for saving trained models')
     parser.add_argument('--val_interval', type=int, default=1, help='validation interval')
     parser.add_argument('--save_interval', type=int, default=1, help='model saving interval')
     parser.add_argument('--auto_continue',type=bool,default = 0)
@@ -68,6 +68,8 @@ def main():
         charDataset_txt_gen(args.data_path)
 
     train_transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=0.4, saturation=0.3),
         transforms.ToTensor(),
         transforms.Normalize([0.5],[0.5])
         ])
@@ -140,7 +142,7 @@ def train(model, device, args, epoch, all_iters=None):
     Top1_intv,Top5_intv = 0.0, 0.0
     model.train()
     optimizer.zero_grad()
-    printinterval = 100
+    printinterval = 1000
     print(f"---------------  [EPOCH {epoch}]  ---------------")
     for i, (data, target) in tqdm(enumerate(args.trainLoader,0),ncols = 100):
         all_iters += 1
@@ -188,15 +190,14 @@ def validate(model, device, args, all_iters, is_save):
     max_val_iters = 250
     t1  = time.time()
     with torch.no_grad():
-        for i, (data, target) in tqdm(enumerate(args.valLoader,0)):
+        for i, (data, target, path) in tqdm(enumerate(args.valLoader,0)):
 
             target = target.type(torch.LongTensor)
             data, target = data.to(device), target.to(device)
-
             output = model(data).squeeze()
             loss = loss_function(output, target)
 
-            prec1, prec5 = accuracy(output, target, topk=(1, 5))
+            prec1, prec5 = accuracy(output, target, topk=(1, 5), istrain=False)
             n = data.size(0)
             # print(i,loss.item(),prec1.item(),prec5.item())
             objs.update(loss.item(), n)
@@ -218,7 +219,6 @@ def validate(model, device, args, all_iters, is_save):
             args.save, f"checkpoint{all_iters:06}-acc{top1.avg / 100:4f}.pth.tar")
         print(filename)
         torch.save({'state_dict': model.state_dict(),}, filename)
-
 
 if __name__ == "__main__":
     main()

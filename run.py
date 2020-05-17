@@ -20,10 +20,15 @@ from models import *
 from mydataset import *
 from utils import *
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# no "I" and "O"
+label_dic = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z"]
 
 def get_args():
     parser = argparse.ArgumentParser("Plate recognition")
-    parser.add_argument("--model_path",type=str, default="/mnt/hdd/yushixing/pydm/plate_r/resnet34_2/checkpoint0749-iou0.796886.pth.tar")
+    parser.add_argument("--model_path",type=str,
+        default="/mnt/hdd/yushixing/pydm/plate_r/resnet34_2/checkpoint0749-iou0.796886.pth.tar")
+    parser.add_argument("--classifier_path", type=str,
+        default="/mnt/hdd/yushixing/pydm/char_c/resnet34_1/checkpoint002100-acc0.992908.pth.tar")
     parser.add_argument("--data_path", type=str,default="../data/Plate_dataset")
     parser.add_argument("--batchsize", type=int, dest="batchsize",default=1, help="optimizing batch")
 
@@ -75,6 +80,10 @@ def main():
 
     model = resnet34()
     model.load_state_dict(torch.load(args.model_path)["state_dict"])
+    classifier = resnet34(num_classes = 36, inchannels=1)
+    classifier.load_state_dict(torch.load(args.classifier_path)["state_dict"])
+    model.eval()
+    classifier.eval()
 
     if args.use_gpu:
         model     = model.cuda()
@@ -83,76 +92,83 @@ def main():
         device = torch.device("cpu")
 
     model = model.to(device)
-
+    args.classifier = classifier
     args.trainLoader = trainLoader
     args.valLoader = valLoader
 
     validate(model, device, args, all_iters=0, is_save = 0, epoch = 0)
 
 
-def segmentation(img_thre, path):
-    white = []  # 记录每一列的白色像素总和
-    black = []  # ..........黑色.......
+def segmentation(img_gray,img_thre, path, args):
+    if not os.path.exists(f"../binarize/{path[:-4]}/"):
+        os.makedirs(f"../binarize/{path[:-4]}/")
     height = img_thre.shape[0]
     width = img_thre.shape[1]
-    white_max = 0
-    black_max = 0
 
-    white_by_row    = np.sum(img_thre, axis=1)/255
-    black_by_row    = height - white_by_row
-    white_max       = white_by_row.max()
-    black_max       = black_by_row.max()
-    starth, endh = 0, height-1
-    for i in range(0, int(height/3)):
-        if white_by_row[i] >= 60:
-            starth = i
-            break
+    # white_by_row    = np.sum(img_thre, axis=1)/255
+    # starth, endh = 0, height-1
+    # for i in range(0, int(height/3)):
+    #     if white_by_row[i] >= 60:
+    #         starth = i
+    #         break
 
-    for i in range(0, int(height/3)):
-        if white_by_row[height -1 -i] >= 60:
-            endh = height -1 -i
-            break
-    img_thre = img_thre[starth:endh, :]
+    # for i in range(0, int(height/3)):
+    #     if white_by_row[height -1 -i] >= 60:
+    #         endh = height -1 -i
+    #         break
+    # img_thre = img_thre[starth:endh, :]
 
+
+    # white_by_column = np.sum(img_thre, axis=0)/255
+    # startw, endw = 0, width-1
+    # for i in range(0, 5):
+    #     if white_by_column[i] <= 10:
+    #         startw = i
+    # img_thre = img_thre[:, startw:endw]
 
     white_by_column = np.sum(img_thre, axis=0)/255
-    black_by_column = width  - white_by_column
-    startw, endw = 0, width-1
+    height, width = img_thre.shape
 
-    for i in range(0, 5):
-        if white_by_column[i] <= 10:
-            startw = i
+    edge = [0]
+    for i in range(5):
+        center = int((i+1)/6*width)
+        tmp = center
+        max_white = 0
+        for idx in range(center-2, center+3):
+            if white_by_column[idx] > white_by_column[tmp]:
+                tmp = idx
+                max_white = white_by_column[idx]
+        edge.append(tmp)
+    edge.append(width)
 
+    val_transform = transforms.Compose([
+        transforms.Resize((20,20)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5],[0.5])
+    ])
+    mylist = ["3/gt_376_5.jpg", "P/gt_1239_3.jpg","E/gt_144_4.jpg",
+                "6/gt_604_4.jpg","0/debug_char_auxRoi_2050.jpg", "L/116-2.jpg"]
+    for i in range(6):
+        _, img_thre = cv2.threshold(img_gray[:,edge[i]:edge[i+1]], 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        # img_thre = cv2.adaptiveThreshold(img_gray[:,edge[i]:edge[i+1]], 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 5, 10)
+        res = 255 - img_thre
+        # kernel = np.ones((3, 3), np.uint8)
+        # kernel[0,0] = 0
+        # kernel[2,2] = 0
+        # kernel[0,2] = 0
+        # kernel[2,0] = 0
+        # res = cv2.dilate(res, kernel)
+        cv2.imwrite(f"../binarize/{path[:-4]}/{i+1}.jpg", res)
+        im = Image.open(f"../binarize/{path[:-4]}/{i+1}.jpg")
+        # im = Image.open(os.path.join("../data/Chars_data/", mylist[i]))
+        print(im.size)
+        im = val_transform(im).unsqueeze(0)
+        output = args.classifier(im)
+        _, pred = output.topk(5, 1, True, True)
+        pred = pred.t()
+        print(pred[0,0])
 
-    img_thre = img_thre[:, startw:endw]
-
-    cv2.imwrite(f"binarize/{path}", img_thre)
-
-    # arg = False  # False表示白底黑字；True表示黑底白字
-
-    # # 分割图像
-    # def find_end(start_):
-    #     end_ = start_+1
-    #     for m in range(start_+1, width-1):
-    #         if (white_by_column[m]) > (0.95 * white_max):  # 0.95这个参数请多调整，对应下面的0.05
-    #             end_ = m
-    #             break
-    #     return end_
-
-    # n = 1
-    # start = 1
-    # end = 2
-    # while n < width-2:
-    #     n += 1
-    #     if (white_by_column[n] if arg else black_by_column[n]) > (0.05 * black_max):
-    #         # 上面这些判断用来辨别是白底黑字还是黑底白字
-    #         # 0.05这个参数请多调整，对应上面的0.95
-    #         start = n
-    #         end = find_end(start)
-    #         n = end
-    #         if end-start > 5:
-    #             cj = img_thre[1:height, start:end]
-    #             cv2.imwrite(f"binarize/{n}.jpg",cj)
+        print(label_dic[pred[0,0]])
 
 
 def validate(model, device, args, all_iters, is_save, epoch):
@@ -200,13 +216,16 @@ def validate(model, device, args, all_iters, is_save, epoch):
             img = cv2.imread(os.path.join(save_path, imgpath[0]))
             # img = cv2.medianBlur(img, 3)
             h, w, _  = img.shape
-            img = img[7:h-3, :, :]
+            img = img[7:-3, 2:-2, :]
             img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img_thre = img_gray
-            img_thre = cv2.adaptiveThreshold(img_gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 5, 10)
+            # img_gray = cv2.GaussianBlur(img_gray,(5,5),0)
+            # img_thre = cv2.adaptiveThreshold(img_gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 5, 10)
+            _, img_thre = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
             # cv2.threshold(img_gray, 100, 255, cv2.THRESH_BINARY_INV, img_thre)
+            # cv2.imwrite("test.png", img_thre)
             # cv2.imwrite(os.path.join(save_path, imgpath[0]), img_thre)
-            segmentation(img_thre, imgpath[0])
+            segmentation(img_gray,img_thre, imgpath[0], args)
             # exit()
 
 

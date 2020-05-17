@@ -104,7 +104,8 @@ class CharDataset(data.Dataset):
         label = self.datalist.iloc[idx].label
         img = Image.open(imagepath)
         img = self.transform(img)
-
+        if not self.istrain:
+            return img, label, self.datalist.iloc[idx].image
         return img, label
 
 
