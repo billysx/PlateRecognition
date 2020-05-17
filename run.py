@@ -149,7 +149,10 @@ def segmentation(img_gray,img_thre, path, args):
     mylist = ["3/gt_376_5.jpg", "P/gt_1239_3.jpg","E/gt_144_4.jpg",
                 "6/gt_604_4.jpg","0/debug_char_auxRoi_2050.jpg", "L/116-2.jpg"]
     for i in range(6):
-        _, img_thre = cv2.threshold(img_gray[:,edge[i]:edge[i+1]], 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        im = img_gray[:,max(0,edge[i]-1):min(edge[i+1]+1,width)]
+        im = cv2.GaussianBlur(im,(3,3),0)
+        # equalized = cv2.equalizeHist(new)
+        _, img_thre = cv2.threshold(im, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         # img_thre = cv2.adaptiveThreshold(img_gray[:,edge[i]:edge[i+1]], 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 5, 10)
         res = 255 - img_thre
         # kernel = np.ones((3, 3), np.uint8)
@@ -169,6 +172,7 @@ def segmentation(img_gray,img_thre, path, args):
         print(pred[0,0])
 
         print(label_dic[pred[0,0]])
+    exit()
 
 
 def validate(model, device, args, all_iters, is_save, epoch):

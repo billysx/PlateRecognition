@@ -68,7 +68,6 @@ def main():
         charDataset_txt_gen(args.data_path)
 
     train_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=0.4, saturation=0.3),
         transforms.ToTensor(),
         transforms.Normalize([0.5],[0.5])
