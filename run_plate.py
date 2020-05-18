@@ -26,6 +26,7 @@ best_iou = 0.0
 def get_args():
     parser = argparse.ArgumentParser("Plate recognition")
     parser.add_argument("--data_path", type=str,default="../data/Plate_dataset")
+    parser.add_argument('--model_path',type=str,default = "/home/yusx/data/loc_model.pth.tar")
     parser.add_argument("--lr", type=float, dest="lr", default=2e-4, help="Base Learning Rate")
     parser.add_argument("--batchsize", type=int, dest="batchsize",default=1, help="optimizing batch")
     parser.add_argument("--epoch", type=int, dest="epoch", default=1000, help="Number of epochs")
@@ -35,7 +36,6 @@ def get_args():
     parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/pydm/plate_r/resnet34_1', help='path for saving trained models')
     parser.add_argument('--val_interval', type=int, default=1, help='validation interval')
     parser.add_argument('--save_interval', type=int, default=10, help='model saving interval')
-    parser.add_argument('--model_path',type=str,default = "/home/yusx/data/loc_model.pth.tar")
     parser.add_argument("--num_classes",type=int, default = 4)
     args = parser.parse_args()
     return args

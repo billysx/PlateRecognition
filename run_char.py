@@ -27,7 +27,7 @@ char_cnt = 0
 def get_args():
     parser = argparse.ArgumentParser("Plate recognition")
 
-    parser.add_argument("--classifier_path", type=str, default="/mnt/hdd/yushixing/pydm/char_c/resnet34_3/checkpoint000799-acc0.927203.pth.tar")
+    parser.add_argument("--classifier_path", type=str, default="/home/yusx/data/char_model.pth.tar")
     parser.add_argument("--data_path", type=str,default="../data/Plate_dataset")
     parser.add_argument("--batchsize", type=int, dest="batchsize",default=1, help="optimizing batch")
 
