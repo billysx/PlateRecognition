@@ -134,9 +134,9 @@ def segmentation(img_gray,img_thre, path, args, label):
         global plate_cnt
         plate_cnt += 1
 
-    print(ans,file=writefile,end="")
-    print("",file=writefile)
-    print(label[0],file = writefile)
+    print(ans,file=writefile)
+    # print("",file=writefile)
+    # print(label[0],file = writefile)
     writefile.close()
 
 
