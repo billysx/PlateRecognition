@@ -103,7 +103,9 @@ class CharDataset(data.Dataset):
         imagepath = os.path.join(self.datapath, self.datalist.iloc[idx].image)
         label = self.datalist.iloc[idx].label
         img = Image.open(imagepath)
+
         img = self.transform(img)
+        # print(img.shape)
         if not self.istrain:
             return img, label, self.datalist.iloc[idx].image
         return img, label

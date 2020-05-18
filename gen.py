@@ -83,7 +83,7 @@ def main():
     # model = resnet34()
     # model.load_state_dict(torch.load(args.model_path)["state_dict"])
     classifier = resnet34(num_classes = 36, inchannels=1)
-    classifier.load_state_dict(torch.load(args.classifier_path, map_location=lambda storage, loc: storage)["state_dict"])
+    # classifier.load_state_dict(torch.load(args.classifier_path, map_location=lambda storage, loc: storage)["state_dict"])
     # model.eval()
     classifier.eval()
 

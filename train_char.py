@@ -25,17 +25,17 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 def get_args():
     parser = argparse.ArgumentParser("character classification")
     parser.add_argument("--data_path", type=str,default="../data/mychar_data")
-    parser.add_argument("--lr", type=float, dest="lr", default=2e-4, help="Base Learning Rate")
-    parser.add_argument("--batchsize", type=int, dest="batchsize",default=32, help="optimizing batch")
-    parser.add_argument("--epoch", type=int, dest="epoch", default=10, help="Number of epochs")
+    parser.add_argument("--lr", type=float, dest="lr", default=1e-4, help="Base Learning Rate")
+    parser.add_argument("--batchsize", type=int, dest="batchsize",default=64, help="optimizing batch")
+    parser.add_argument("--epoch", type=int, dest="epoch", default=20, help="Number of epochs")
 
     parser.add_argument("--gpu", type=int, dest="gpunum", default=1, help="gpu number")
     parser.add_argument("--ft", type=int, dest="ft", default=0, help="whether it is a finetune process")
-    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/pydm/char_c/resnet34_1', help='path for saving trained models')
+    parser.add_argument('--save', type=str, default='/mnt/hdd/yushixing/pydm/char_c/resnet34_128', help='path for saving trained models')
     parser.add_argument('--val_interval', type=int, default=1, help='validation interval')
     parser.add_argument('--save_interval', type=int, default=1, help='model saving interval')
     parser.add_argument('--auto_continue',type=bool,default = 0)
-    parser.add_argument("--num_classes",type=int, default = 36)
+    parser.add_argument("--num_classes",type=int, default = 34)
     args = parser.parse_args()
     return args
 
@@ -69,14 +69,16 @@ def main():
 
     train_transform = transforms.Compose([
         transforms.ColorJitter(brightness=0.4, saturation=0.3),
+        transforms.Resize((20,20)),
         transforms.ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
-        # transforms.Normalize([0.5],[0.5])
+        # transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
+        transforms.Normalize([0.5],[0.5])
         ])
     val_transform = transforms.Compose([
+        transforms.Resize((20,20)),
         transforms.ToTensor(),
-        transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
-        # transforms.Normalize([0.5],[0.5])
+        # transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
+        transforms.Normalize([0.5],[0.5])
         ])
     trainset    = CharDataset(args.data_path, istrain=True, transform = train_transform)
     valset      = CharDataset(args.data_path, istrain=False, transform = val_transform)
@@ -85,7 +87,7 @@ def main():
 
     print('load data successfully')
 
-    model = resnet34(num_classes = args.num_classes, inchannels=3)
+    model = resnet34(num_classes = args.num_classes, inchannels=1)
     init_weights(model)
     criterion_smooth = CrossEntropyLabelSmooth(args.num_classes, 0.1)
 
@@ -143,7 +145,7 @@ def train(model, device, args, epoch, all_iters=None):
     Top1_intv,Top5_intv = 0.0, 0.0
     model.train()
     optimizer.zero_grad()
-    printinterval = 1000
+    printinterval = 90
     print(f"---------------  [EPOCH {epoch}]  ---------------")
     for i, (data, target) in tqdm(enumerate(args.trainLoader,0),ncols = 100):
         all_iters += 1

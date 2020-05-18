@@ -22,13 +22,14 @@ from utils import *
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # no "I" and "O"
 label_dic = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z"]
-
+plate_cnt = 0
+char_cnt = 0
 def get_args():
     parser = argparse.ArgumentParser("Plate recognition")
     parser.add_argument("--model_path",type=str,
         default="/mnt/hdd/yushixing/pydm/plate_r/resnet34_2/checkpoint0749-iou0.796886.pth.tar")
     parser.add_argument("--classifier_path", type=str,
-        default="/mnt/hdd/yushixing/pydm/char_c/resnet34_1/checkpoint002100-acc0.992908.pth.tar")
+        default="/mnt/hdd/yushixing/pydm/char_c/resnet34_3/checkpoint000799-acc0.927203.pth.tar")
     parser.add_argument("--data_path", type=str,default="../data/Plate_dataset")
     parser.add_argument("--batchsize", type=int, dest="batchsize",default=1, help="optimizing batch")
 
@@ -80,7 +81,7 @@ def main():
 
     # model = resnet34()
     # model.load_state_dict(torch.load(args.model_path)["state_dict"])
-    classifier = resnet34(num_classes = 36, inchannels=1)
+    classifier = resnet34(num_classes = 34, inchannels=1)
     classifier.load_state_dict(torch.load(args.classifier_path, map_location=lambda storage, loc: storage)["state_dict"])
     # model.eval()
     classifier.eval()
@@ -152,18 +153,18 @@ def segmentation(img_gray,img_thre, path, args, label):
     ans = ""
     for i in range(6):
         im = img_gray[:,max(0,edge[i]-1):min(edge[i+1]+1,width)]
-        im = cv2.GaussianBlur(im,(3,3),0)
+        # im = cv2.GaussianBlur(im,(3,3),0)
         # equalized = cv2.equalizeHist(new)
         # _, img_thre = cv2.threshold(im, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        img_thre = cv2.adaptiveThreshold(im, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 7, 5)
-        res = 255 - img_thre
+        # img_thre = cv2.adaptiveThreshold(im, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 7, 5)
+        # res = 255 - img_thre
         # kernel = np.ones((3, 3), np.uint8)
         # kernel[0,0] = 0
         # kernel[2,2] = 0
         # kernel[0,2] = 0
         # kernel[2,0] = 0
         # res = cv2.dilate(res, kernel)
-        cv2.imwrite(f"../binarize/{path[:-4]}/{i+1}.jpg", res)
+        cv2.imwrite(f"../binarize/{path[:-4]}/{i+1}.jpg", im)
         im = Image.open(f"../binarize/{path[:-4]}/{i+1}.jpg")
         # im = Image.open(os.path.join("../data/Chars_data/", mylist[i]))
         # print(im.size)
@@ -173,13 +174,16 @@ def segmentation(img_gray,img_thre, path, args, label):
         output = args.classifier(im)
         _, pred = output.topk(5, 1, True, True)
         pred = pred.t()
-        # print(pred[0,0])
+        if label_dic[pred[0,0]] == label[0][i]:
+            global char_cnt
+            char_cnt+=1
         ans += label_dic[pred[0,0]]
     print(ans)
     print(end=" ")
     print(label[0])
     if(ans == label[0]):
-        print(1)
+        global plate_cnt
+        plate_cnt += 1
 
     print(ans,file=writefile,end="")
     print("",file=writefile)
@@ -229,7 +233,10 @@ def validate(model, device, args, all_iters, is_save, epoch):
             # cv2.imwrite(os.path.join(save_path, imgpath[0]), img_thre)
             segmentation(img_gray,img_thre, imgpath[0], args, platelabel)
             # exit()
-
+    global char_cnt
+    print(char_cnt / 600)
+    global plate_cnt
+    print(plate_cnt / 100)
 
 
 
