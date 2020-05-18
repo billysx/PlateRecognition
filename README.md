@@ -2,7 +2,8 @@
 
  Python Datamining final project
 
-
+models can be downloaded at
+https://disk.pku.edu.cn:443/link/7CEB1A5D1C20D6F75F582E5D36D13442
 
 ## Part 1 Character recognizing
 
