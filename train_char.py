@@ -16,7 +16,7 @@ import argparse
 
 from PIL import Image
 from tqdm import tqdm
-from models import *
+from char_net import *
 from mydataset import *
 from utils import *
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
@@ -87,7 +87,7 @@ def main():
 
     print('load data successfully')
 
-    model = resnet34(num_classes = args.num_classes, inchannels=1)
+    model = char_net.resnet34(num_classes = args.num_classes, inchannels=1)
     init_weights(model)
     criterion_smooth = CrossEntropyLabelSmooth(args.num_classes, 0.1)
 

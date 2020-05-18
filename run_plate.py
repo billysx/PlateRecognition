@@ -12,12 +12,12 @@ import time
 import logging
 import argparse
 import torch.nn.functional as F
-
-
-
 from PIL import Image
 from tqdm import tqdm
-from models import *
+import imageio
+
+
+import loc_net
 from mydataset import *
 from utils import *
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
@@ -59,19 +59,18 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5])
         ])
-    trainset = PlateDataset(args.data_path, istrain=True, transform = train_transform)
-    valset   = PlateDataset(args.data_path, istrain=False, transform = val_transform)
+    trainset = PlateDataset(args.data_path, istrain=True, transform = train_transform, istest = True)
+    valset   = PlateDataset(args.data_path, istrain=False, transform = val_transform, istest = True)
     print(len(trainset),len(valset))
 
     trainLoader = torch.utils.data.DataLoader(trainset, batch_size=args.batchsize, shuffle=True)
     valLoader   = torch.utils.data.DataLoader(valset, batch_size=args.batchsize, shuffle=False)
     print('load data successfully')
 
-    model = resnet34()
+    model = loc_net.resnet34()
     criterion = GiouLoss()
 
     if args.use_gpu:
-        #model = nn.DataParallel(model).cuda()
         model     = model.cuda()
         criterion = criterion.cuda()
         device    = torch.device("cuda")
@@ -99,8 +98,14 @@ def validate(model, device, args, all_iters, is_save, epoch):
     loss_function = args.loss_function
 
     model.eval()
+    correct_cnt = 0
+    save_path = os.path.join(args.data_path,"AC","test", "plate")
+    read_path = os.path.join(args.data_path,"AC","test", "jpeg")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
     with torch.no_grad():
-        for i, (data, target) in tqdm(enumerate(args.valLoader,0),ncols = 100):
+        for i, (data, target, tmp, imgpath, platelabel) in tqdm(enumerate(args.valLoader,0),ncols = 100):
             all_iters += 1
             data, target = data.to(device), target.to(device)
             b, c, h, w = data.shape
@@ -117,16 +122,25 @@ def validate(model, device, args, all_iters, is_save, epoch):
             else:
                 scale = torch.Tensor([w,h,w,h])
             pos = pred*scale
+            rec1 = pos.squeeze()
+
+            x1, y1, x2, y2 = int(rec1[0].item()), int(rec1[1].item()), int(rec1[2].item()), int(rec1[3].item())
+            data = imageio.imread(os.path.join(read_path, imgpath[0]))
+            out  = data.squeeze()[:,tmp:tmp+320, :][y1:y2, x1:x2, :]
+            imageio.imsave(os.path.join(save_path, imgpath[0]), out)
 
             iou, giou = args.loss_function(args, pos, target)
+            if iou.mean().item() >= 0.5:
+                correct_cnt+=1
+
 
             iou_sum   += iou.mean().item()
             giou_sum  += giou.mean().item()
 
 
-        printInfo = 'ITER {}:\t'.format(all_iters) + \
-                    'IoU = {:.6f},\t'.format(iou_sum / len(args.valLoader)) + \
-                    'GIoU = {:.6f},\t'.format(giou_sum / len(args.valLoader))
+        printInfo = f'IoU = {iou_sum / len(args.valLoader):.6f},\n' + \
+                    f'GIoU = {giou_sum / len(args.valLoader):.6f},\n' + \
+                    f'Accuracy = {correct_cnt :.2f}% (IoU greater than 0.5)'
         print(printInfo)
 
 

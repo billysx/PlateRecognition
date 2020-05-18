@@ -12,14 +12,15 @@ import time
 import logging
 import argparse
 import torch.nn.functional as F
-
-
-
 from PIL import Image
 from tqdm import tqdm
-from models import *
+
+
+import loc_net
+import char_net
 from mydataset import *
 from utils import *
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 best_iou = 0.0
 
@@ -79,7 +80,8 @@ def main():
     valLoader   = torch.utils.data.DataLoader(valset, batch_size=args.batchsize, shuffle=False)
     print('load data successfully')
 
-    model = resnet34()
+    # model = loc_net.resnet34()
+    model = char_net.resnet34()
     init_weights(model)
     criterion = GiouLoss()
 
