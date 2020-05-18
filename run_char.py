@@ -83,9 +83,9 @@ def main():
 
 
 def segmentation(img_gray,img_thre, path, args, label):
-    if not os.path.exists(f"../binarize/{path[:-4]}/"):
-        os.makedirs(f"../binarize/{path[:-4]}/")
-    writefile = open(f"../binarize/{path[:-4]}/pred.txt","w")
+    if not os.path.exists(f"../seg/{path[:-4]}/"):
+        os.makedirs(f"../seg/{path[:-4]}/")
+    writefile = open(f"../seg/{path[:-4]}/pred.txt","w")
     height = img_thre.shape[0]
     width = img_thre.shape[1]
 
@@ -115,8 +115,8 @@ def segmentation(img_gray,img_thre, path, args, label):
     for i in range(6):
         im = img_gray[:,max(0,edge[i]-1):min(edge[i+1]+1,width)]
 
-        cv2.imwrite(f"../binarize/{path[:-4]}/{i+1}.jpg", im)
-        im = Image.open(f"../binarize/{path[:-4]}/{i+1}.jpg")
+        cv2.imwrite(f"../seg/{path[:-4]}/{i+1}.jpg", im)
+        im = Image.open(f"../seg/{path[:-4]}/{i+1}.jpg")
 
 
         im = val_transform(im).unsqueeze(0)
