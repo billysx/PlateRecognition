@@ -124,8 +124,8 @@ def validate(model, device, args, all_iters, is_save, epoch):
             pos = pred*scale
             rec1 = pos.squeeze()
             x1, y1, x2, y2 = int(rec1[0].item()), int(rec1[1].item()), int(rec1[2].item()), int(rec1[3].item())
-            with open(f"../seg/{imgpath[0][:-4]}/pred.txt","a") as writefile:
-                print(f"{x1},{y1},{x2},{y2}",file=writefile)
+            with open(f"../seg/{imgpath[0][:-4]}/bbox.txt","w") as writefile:
+                print(f"{x1+tmp.item()},{y1},{x2+tmp.item()},{y2}",file=writefile)
                 print(imgpath[0],file=writefile)
 
             data = imageio.imread(os.path.join(read_path, imgpath[0]))
